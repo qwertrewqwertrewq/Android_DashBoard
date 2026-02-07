@@ -1,0 +1,24 @@
+{
+  "buttons": [
+    {
+      "name": "获取背光",
+      "color": "#4CAF50",
+      "url": "http://192.168.1.100:8080/backlight/get"
+    },
+    {
+      "name": "增加亮度",
+      "color": "#2196F3",
+      "url": "http://192.168.1.100:8080/backlight/increase"
+    },
+    {
+      "name": "降低亮度",
+      "color": "#FF9800",
+      "url": "http://192.168.1.100:8080/backlight/decrease"
+    },
+    {
+      "name": "最大亮度",
+      "color": "#F44336",
+      "url": "http://192.168.1.100:8080/backlight/max"
+    }
+  ]
+}

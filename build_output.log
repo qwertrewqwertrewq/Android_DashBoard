@@ -1,0 +1,16 @@
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+A problem occurred configuring root project 'BacklightController'.
+> Could not open cp_proj generic class cache for build file '/home/ynqjzrjzrj/coding/android/build.gradle' (/home/ynqjzrjzrj/.gradle/caches/8.0/scripts/9ozxy4xo5blutzkzlevwhp1vb).
+   > BUG! exception in phase 'semantic analysis' in source unit '_BuildScript_' Unsupported class file major version 65
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+
+* Get more help at https://help.gradle.org
+
+BUILD FAILED in 1s
