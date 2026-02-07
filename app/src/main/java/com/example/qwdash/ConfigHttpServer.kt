@@ -73,7 +73,7 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
             // 获取单个按钮配置
             uri.matches(Regex("/api/buttons/\\d+")) && method == "GET" -> {
                 val buttonId = uri.split("/").last().toIntOrNull()
-                if (buttonId != null && buttonId in 0..6) {
+                if (buttonId != null && buttonId in 0..7) {
                     getButtonConfig(buttonId)
                 } else {
                     errorResponse("无效的按钮ID")
@@ -83,7 +83,7 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
             // 更新按钮配置
             uri.matches(Regex("/api/buttons/\\d+")) && method == "POST" -> {
                 val buttonId = uri.split("/").last().toIntOrNull()
-                if (buttonId != null && buttonId in 0..6) {
+                if (buttonId != null && buttonId in 0..7) {
                     val postData = parsePostData(session)
                     updateButtonConfig(buttonId, postData)
                 } else {
@@ -119,7 +119,7 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
         config.addProperty("layout", ConfigManager.getLayoutMode())
         
         val buttons = mutableListOf<Map<String, String>>()
-        for (i in 0..6) {
+        for (i in 0..7) {
             val buttonData = ConfigManager.getButtonConfig(i)
             buttons.add(mapOf(
                 "id" to i.toString(),
@@ -144,7 +144,7 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
      */
     private fun getButtonsConfig(): Response {
         val buttons = mutableListOf<Map<String, String>>()
-        for (i in 0..6) {
+        for (i in 0..7) {
             val buttonData = ConfigManager.getButtonConfig(i)
             buttons.add(mapOf(
                 "id" to i.toString(),
@@ -356,7 +356,7 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
         </div>
         
         <div class="card">
-            <h2>按钮配置（1-7号）</h2>
+            <h2>按钮配置（1-8号）</h2>
             <div class="button-grid" id="buttonsContainer"></div>
         </div>
         

@@ -8,7 +8,6 @@ import android.os.PowerManager
 import android.view.MotionEvent
 import android.view.View
 import android.widget.*
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import org.videolan.libvlc.util.VLCVideoLayout
 import okhttp3.*
@@ -32,7 +31,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var videoContainer: FrameLayout
     private var videoRotationContainer: FrameLayout? = null  // 仅在竖屏布局中存在
     private val buttons = mutableListOf<Button>()
-    private val okHttpClient = OkHttpClient()
     
     // RTSP 视频流管理器
     private var rtspStreamManager: RtspStreamManager? = null
@@ -178,19 +176,13 @@ class MainActivity : AppCompatActivity() {
         buttons.add(findViewById(R.id.button7))
         buttons.add(findViewById(R.id.button8))
         
-        // 前7个按钮从配置加载
-        for (i in 0..6) {
+        // 8个按钮全部从配置加载
+        for (i in 0..7) {
             val buttonData = ConfigManager.getButtonConfig(i)
             buttons[i].text = buttonData.name
             buttons[i].setOnClickListener {
                 onButtonClick(i, buttonData)
             }
-        }
-        
-        // 第8个按钮固定为编辑
-        buttons[7].text = "编辑"
-        buttons[7].setOnClickListener {
-            showConfigDialog()
         }
     }
     
@@ -220,118 +212,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    /**
-     * 显示配置对话框
-     */
-    private fun showConfigDialog() {
-        // 暂停定时器，避免编辑过程中屏幕亮度降低
-        handler.removeCallbacks(screenOffRunnable)
-        
-        val dialogView = layoutInflater.inflate(R.layout.dialog_config, null)
-        val editRtspUrl = dialogView.findViewById<EditText>(R.id.editRtspUrl)
-        val spinnerButton = dialogView.findViewById<Spinner>(R.id.spinnerButton)
-        val editButtonName = dialogView.findViewById<EditText>(R.id.editButtonName)
-        val editCurlCommand = dialogView.findViewById<EditText>(R.id.editCurlCommand)
-        val spinnerLayout = dialogView.findViewById<Spinner>(R.id.spinnerLayout)
-        val btnSwitchLayout = dialogView.findViewById<Button>(R.id.btnSwitchLayout)
-        
-        // 设置当前 RTSP URL
-        editRtspUrl.setText(ConfigManager.getRtspUrl())
-        
-        // 设置按钮选择器
-        val buttonNames = (1..7).map { "按钮 $it" }.toTypedArray()
-        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, buttonNames)
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerButton.adapter = adapter
-        
-        // 监听按钮选择变化
-        spinnerButton.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                val buttonData = ConfigManager.getButtonConfig(position)
-                editButtonName.setText(buttonData.name)
-                editCurlCommand.setText(buttonData.curlCommand)
-            }
-            
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-        
-        // 设置布局模式选择器
-        val layoutOptions = arrayOf("竖屏布局（旋转视频）", "横屏布局（侧边按钮）")
-        val layoutAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, layoutOptions)
-        layoutAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerLayout.adapter = layoutAdapter
-        
-        // 设置当前布局模式
-        val currentMode = if (ConfigManager.isHorizontalLayout()) 1 else 0
-        spinnerLayout.setSelection(currentMode)
-        
-        // 切换布局按钮
-        btnSwitchLayout.setOnClickListener {
-            val selectedMode = if (spinnerLayout.selectedItemPosition == 0) "vertical" else "horizontal"
-            ConfigManager.saveLayoutMode(selectedMode)
-            showToast("布局已切换，重启应用后生效")
-            updateStatus("布局模式已改变为: ${layoutOptions[spinnerLayout.selectedItemPosition]}\\n", append = true)
-            
-            // 2秒后重新启动Activity
-            handler.postDelayed({
-                recreate()
-            }, 1000)
-        }
-        
-        // 创建对话框
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("配置")
-            .setView(dialogView)
-            .create()
-        
-        // 保存按钮
-        dialogView.findViewById<Button>(R.id.btnSave).setOnClickListener {
-            val rtspUrl = editRtspUrl.text.toString().trim()
-            val selectedIndex = spinnerButton.selectedItemPosition
-            val buttonName = editButtonName.text.toString().trim()
-            val curlCommand = editCurlCommand.text.toString().trim()
-            
-            if (rtspUrl.isNotEmpty()) {
-                ConfigManager.saveRtspUrl(rtspUrl)
-                // 重启视频流
-                restartVideoStream()
-            }
-            
-            if (buttonName.isNotEmpty()) {
-                ConfigManager.saveButtonConfig(selectedIndex, ButtonData(buttonName, curlCommand))
-                buttons[selectedIndex].text = buttonName
-                updateStatus("配置已保存: $buttonName\\n", append = true)
-            }
-            
-            showToast("配置已保存")
-            dialog.dismiss()
-        }
-        
-        // 取消按钮
-        dialogView.findViewById<Button>(R.id.btnCancel).setOnClickListener {
-            dialog.dismiss()
-        }
-        
-        // 对话框关闭时重启定时器
-        dialog.setOnDismissListener {
-            resetTimer()
-        }
-        
-        dialog.show()
-    }
-    
-    /**
-     * 重启视频流
-     */
-    private fun restartVideoStream() {
-        thread {
-            rtspStreamManager?.release()
-            runOnUiThread {
-                setupVideoStream()
-                updateStatus("视频流已重启\\n", append = true)
-            }
-        }
-    }
     
     /**
      * 设置视频旋转（横屏16:9旋转为竖屏9:16，高度占满屏幕）
