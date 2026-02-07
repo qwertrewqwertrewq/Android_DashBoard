@@ -1,4 +1,4 @@
-package com.example.backlightcontroller
+package com.example.qwdash
 
 /**
  * 按钮配置数据类

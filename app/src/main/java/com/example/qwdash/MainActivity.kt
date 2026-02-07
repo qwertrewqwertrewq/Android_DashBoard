@@ -1,4 +1,4 @@
-package com.example.backlightcontroller
+package com.example.qwdash
 
 import android.content.Context
 import android.os.Bundle
@@ -25,16 +25,20 @@ class MainActivity : AppCompatActivity() {
     }
     
     private lateinit var statusTextView: TextView
+    private lateinit var statusScrollView: ScrollView
     private lateinit var blackOverlay: View
     private lateinit var videoView: VLCVideoLayout
     private lateinit var snapshotImageView: ImageView
     private lateinit var videoContainer: FrameLayout
-    private lateinit var videoRotationContainer: FrameLayout
+    private var videoRotationContainer: FrameLayout? = null  // 仅在竖屏布局中存在
     private val buttons = mutableListOf<Button>()
     private val okHttpClient = OkHttpClient()
     
     // RTSP 视频流管理器
     private var rtspStreamManager: RtspStreamManager? = null
+    
+    // HTTP配置服务器
+    private var httpServer: ConfigHttpServer? = null
     
     // WakeLock 保持 CPU 运行
     private var wakeLock: PowerManager.WakeLock? = null
@@ -66,20 +70,30 @@ class MainActivity : AppCompatActivity() {
         // 隐藏标题栏
         supportActionBar?.hide()
         
-        setContentView(R.layout.activity_main)
+        // 初始化配置管理器
+        ConfigManager.init(this)
         
+        // 根据配置选择布局
+        val layoutId = if (ConfigManager.isHorizontalLayout()) {
+            R.layout.activity_main_horizontal
+        } else {
+            R.layout.activity_main
+        }
+        setContentView(layoutId)
+        
+        // 初始化控件
         statusTextView = findViewById(R.id.statusTextView)
+        statusScrollView = findViewById(R.id.statusScrollView)
         blackOverlay = findViewById(R.id.blackOverlay)
         videoView = findViewById(R.id.videoView)
         snapshotImageView = findViewById(R.id.snapshotImageView)
         videoContainer = findViewById(R.id.videoContainer)
         videoRotationContainer = findViewById(R.id.videoRotationContainer)
         
-        // 初始化配置管理器
-        ConfigManager.init(this)
-        
-        // 设置视频旋转
-        setupVideoRotation()
+        // 设置视频旋转（仅在竖屏布局中有该控件）
+        if (videoRotationContainer != null) {
+            setupVideoRotation()
+        }
         
         // 设置按钮
         setupButtons()
@@ -102,6 +116,9 @@ class MainActivity : AppCompatActivity() {
         }
         
         updateStatus("应用已启动\n")
+        
+        // 启动HTTP配置服务器
+        startHttpServer()
         
         // 启动定时器
         resetTimer()
@@ -215,6 +232,8 @@ class MainActivity : AppCompatActivity() {
         val spinnerButton = dialogView.findViewById<Spinner>(R.id.spinnerButton)
         val editButtonName = dialogView.findViewById<EditText>(R.id.editButtonName)
         val editCurlCommand = dialogView.findViewById<EditText>(R.id.editCurlCommand)
+        val spinnerLayout = dialogView.findViewById<Spinner>(R.id.spinnerLayout)
+        val btnSwitchLayout = dialogView.findViewById<Button>(R.id.btnSwitchLayout)
         
         // 设置当前 RTSP URL
         editRtspUrl.setText(ConfigManager.getRtspUrl())
@@ -234,6 +253,29 @@ class MainActivity : AppCompatActivity() {
             }
             
             override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+        
+        // 设置布局模式选择器
+        val layoutOptions = arrayOf("竖屏布局（旋转视频）", "横屏布局（侧边按钮）")
+        val layoutAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, layoutOptions)
+        layoutAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerLayout.adapter = layoutAdapter
+        
+        // 设置当前布局模式
+        val currentMode = if (ConfigManager.isHorizontalLayout()) 1 else 0
+        spinnerLayout.setSelection(currentMode)
+        
+        // 切换布局按钮
+        btnSwitchLayout.setOnClickListener {
+            val selectedMode = if (spinnerLayout.selectedItemPosition == 0) "vertical" else "horizontal"
+            ConfigManager.saveLayoutMode(selectedMode)
+            showToast("布局已切换，重启应用后生效")
+            updateStatus("布局模式已改变为: ${layoutOptions[spinnerLayout.selectedItemPosition]}\\n", append = true)
+            
+            // 2秒后重新启动Activity
+            handler.postDelayed({
+                recreate()
+            }, 1000)
         }
         
         // 创建对话框
@@ -295,6 +337,9 @@ class MainActivity : AppCompatActivity() {
      * 设置视频旋转（横屏16:9旋转为竖屏9:16，高度占满屏幕）
      */
     private fun setupVideoRotation() {
+        // 仅在竖屏布局中执行（该布局中有videoRotationContainer）
+        val rotationContainer = videoRotationContainer ?: return
+        
         videoContainer.post {
             // 获取屏幕高度
             val screenHeight = videoContainer.height
@@ -312,27 +357,27 @@ class MainActivity : AppCompatActivity() {
             val videoHeight = screenHeight
             
             // 设置旋转容器尺寸为横屏视频尺寸
-            val rotationParams = videoRotationContainer.layoutParams
+            val rotationParams = rotationContainer.layoutParams
             rotationParams.width = videoWidth
             rotationParams.height = videoHeight
-            videoRotationContainer.layoutParams = rotationParams
+            rotationContainer.layoutParams = rotationParams
             
             // 设置旋转中心点（容器中心）
-            videoRotationContainer.pivotX = (videoWidth / 2).toFloat()
-            videoRotationContainer.pivotY = (videoHeight / 2).toFloat()
+            rotationContainer.pivotX = (videoWidth / 2).toFloat()
+            rotationContainer.pivotY = (videoHeight / 2).toFloat()
             
             // 顺时针旋转90度
-            videoRotationContainer.rotation = 90f
+            rotationContainer.rotation = 90f
             
             // 旋转后宽高互换：原宽(videoWidth)变成高，原高(videoHeight)变成宽
             // 需要缩放让旋转后的宽(原高videoHeight)适应容器宽度containerWidth
             val scale = containerWidth.toFloat() / videoHeight.toFloat()
-            videoRotationContainer.scaleX = scale
-            videoRotationContainer.scaleY = scale
+            rotationContainer.scaleX = scale
+            rotationContainer.scaleY = scale
             
             // 调整位置：顶部对齐
-            videoRotationContainer.translationX = 0f
-            videoRotationContainer.translationY = 0f
+            rotationContainer.translationX = 0f
+            rotationContainer.translationY = 0f
             
             android.util.Log.d(TAG, "Video rotation setup: screen=${containerWidth}x${screenHeight}, video=${videoWidth}x${videoHeight}, scale=$scale")
         }
@@ -451,6 +496,9 @@ class MainActivity : AppCompatActivity() {
             } else {
                 statusTextView.text = text
             }
+            statusScrollView.post {
+                statusScrollView.fullScroll(View.FOCUS_DOWN)
+            }
         }
     }
     
@@ -463,11 +511,74 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * 启动HTTP配置服务器
+     */
+    private fun startHttpServer() {
+        thread {
+            try {
+                httpServer = ConfigHttpServer(8888)
+                httpServer?.start()
+                
+                // 获取设备IP地址
+                val ipAddress = getDeviceIpAddress()
+                
+                runOnUiThread {
+                    val message = "HTTP服务器已启动\nhttp://$ipAddress:8888\n"
+                    updateStatus(message, append = true)
+                    showToast("配置服务器已启动: http://$ipAddress:8888")
+                    android.util.Log.d(TAG, "HTTP服务器启动成功: $message")
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    updateStatus("HTTP服务器启动失败: ${e.message}\n", append = true)
+                    showToast("服务器启动失败: ${e.message}")
+                    android.util.Log.e(TAG, "HTTP服务器启动失败", e)
+                }
+            }
+        }
+    }
+    
+    /**
+     * 停止HTTP配置服务器
+     */
+    private fun stopHttpServer() {
+        try {
+            httpServer?.stop()
+            httpServer = null
+            updateStatus("HTTP服务器已停止\n", append = true)
+            android.util.Log.d(TAG, "HTTP服务器已停止")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "停止HTTP服务器失败", e)
+        }
+    }
+    
+    /**
+     * 获取设备IP地址
+     */
+    private fun getDeviceIpAddress(): String {
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            for (iface in interfaces) {
+                for (addr in iface.inetAddresses) {
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        return addr.hostAddress ?: "127.0.0.1"
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "获取IP地址失败", e)
+        }
+        return "127.0.0.1"
+    }
+    
     override fun onDestroy() {
         super.onDestroy()
         // 移除定时器
         handler.removeCallbacks(screenOffRunnable)
         handler.removeCallbacks(brightnessKeepLowRunnable)
+        // 停止HTTP服务器
+        stopHttpServer()
         // 释放视频流资源
         rtspStreamManager?.release()
         // 释放 WakeLock

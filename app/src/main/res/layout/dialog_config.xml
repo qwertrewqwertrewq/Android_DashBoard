@@ -81,6 +81,36 @@
             android:scrollbars="vertical"
             android:paddingBottom="16dp" />
 
+        <!-- 布局模式 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="布局模式"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:paddingBottom="4dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingBottom="16dp"
+            android:gravity="center_vertical">
+
+            <Spinner
+                android:id="@+id/spinnerLayout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="8dp" />
+
+            <Button
+                android:id="@+id/btnSwitchLayout"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="切换布局" />
+        </LinearLayout>
+
         <!-- 按钮 -->
         <LinearLayout
             android:layout_width="match_parent"

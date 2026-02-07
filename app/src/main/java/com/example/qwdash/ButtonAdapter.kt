@@ -1,4 +1,4 @@
-package com.example.backlightcontroller
+package com.example.qwdash
 
 import android.graphics.Color
 import android.view.LayoutInflater

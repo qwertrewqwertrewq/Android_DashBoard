@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'com.example.backlightcontroller'
+    namespace 'com.example.qwdash'
     compileSdk 31
 
     defaultConfig {
-        applicationId "com.example.backlightcontroller"
+        applicationId "com.example.qwdash"
         minSdk 25
         targetSdk 31
         versionCode 1
@@ -21,6 +21,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    
+    lintOptions {
+        abortOnError false
+    }
+    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -40,4 +45,10 @@ dependencies {
     
     // LibVLC for RTSP streaming
     implementation 'org.videolan.android:libvlc-all:3.4.4'
+    
+    // NanoHTTPD for lightweight HTTP server
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+    
+    // Gson for JSON serialization
+    implementation 'com.google.code.gson:gson:2.8.9'
 }

@@ -1,4 +1,4 @@
-package com.example.backlightcontroller
+package com.example.qwdash
 
 import android.content.Context
 import android.content.SharedPreferences
@@ -12,7 +12,10 @@ object ConfigManager {
     private const val PREFS_NAME = "app_config"
     private const val KEY_RTSP_URL = "rtsp_url"
     private const val KEY_BUTTONS = "buttons"
+    private const val KEY_LAYOUT = "layout_mode"
     private const val DEFAULT_RTSP_URL = "rtsp://192.168.31.17:8554/stream1"
+    private const val LAYOUT_VERTICAL = "vertical"
+    private const val LAYOUT_HORIZONTAL = "horizontal"
     
     private lateinit var prefs: SharedPreferences
     
@@ -86,6 +89,37 @@ object ConfigManager {
         jsonArray.put(index, jsonObject)
         
         prefs.edit().putString(KEY_BUTTONS, jsonArray.toString()).apply()
+    }
+    
+    /**
+     * 获取布局模式
+     */
+    fun getLayoutMode(): String {
+        return prefs.getString(KEY_LAYOUT, LAYOUT_HORIZONTAL) ?: LAYOUT_HORIZONTAL
+    }
+    
+    /**
+     * 保存布局模式
+     */
+    fun saveLayoutMode(mode: String) {
+        prefs.edit().putString(KEY_LAYOUT, mode).apply()
+    }
+    
+    /**
+     * 切换布局模式
+     */
+    fun toggleLayoutMode(): String {
+        val currentMode = getLayoutMode()
+        val newMode = if (currentMode == LAYOUT_VERTICAL) LAYOUT_HORIZONTAL else LAYOUT_VERTICAL
+        saveLayoutMode(newMode)
+        return newMode
+    }
+    
+    /**
+     * 检查是否为水平布局
+     */
+    fun isHorizontalLayout(): Boolean {
+        return getLayoutMode() == LAYOUT_HORIZONTAL
     }
 }
 
