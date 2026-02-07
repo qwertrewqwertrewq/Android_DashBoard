@@ -187,19 +187,67 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
      */
     private fun parsePostData(session: IHTTPSession): JSONObject {
         return try {
+            val contentType = session.headers["content-type"] ?: ""
+            if (session.method == Method.POST && contentType.contains("application/json", ignoreCase = true)) {
+                val body = readRequestBody(session)
+                if (body.isNotBlank()) {
+                    return JSONObject(body)
+                }
+            }
+
             val inputData = mutableMapOf<String, String>()
             session.parseBody(inputData)
             val bodyContent = inputData["postData"]
             if (!bodyContent.isNullOrEmpty()) {
-                JSONObject(bodyContent)
+                JSONObject(decodeBody(bodyContent))
             } else if (session.parms.isNotEmpty()) {
-                JSONObject(session.parms as Map<*, *>)
+                val decodedParams = session.parms.mapValues { (_, value) ->
+                    decodeBody(value)
+                }
+                JSONObject(decodedParams as Map<*, *>)
             } else {
                 JSONObject()
             }
         } catch (e: Exception) {
             Log.e(TAG, "解析POST数据失败", e)
             JSONObject()
+        }
+    }
+
+    private fun decodeBody(text: String): String {
+        return try {
+            String(text.toByteArray(Charsets.ISO_8859_1), Charsets.UTF_8)
+        } catch (e: Exception) {
+            text
+        }
+    }
+
+    private fun readRequestBody(session: IHTTPSession): String {
+        return try {
+            val contentLength = session.headers["content-length"]?.toIntOrNull() ?: -1
+            val input = session.inputStream
+            val buffer = ByteArray(4096)
+            var totalRead = 0
+            val output = java.io.ByteArrayOutputStream()
+
+            while (true) {
+                val toRead = if (contentLength > 0) {
+                    minOf(buffer.size, contentLength - totalRead)
+                } else {
+                    buffer.size
+                }
+                if (toRead <= 0) break
+
+                val read = input.read(buffer, 0, toRead)
+                if (read <= 0) break
+
+                output.write(buffer, 0, read)
+                totalRead += read
+            }
+
+            output.toString(Charsets.UTF_8.name())
+        } catch (e: Exception) {
+            ""
         }
     }
     
@@ -212,7 +260,7 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
         response.add("data", gson.toJsonTree(data))
         return newFixedLengthResponse(
             NanoHTTPD.Response.Status.OK, 
-            "application/json", 
+            "application/json; charset=utf-8", 
             response.toString()
         )
     }
@@ -226,7 +274,7 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
         response.addProperty("message", message)
         return newFixedLengthResponse(
             NanoHTTPD.Response.Status.BAD_REQUEST, 
-            "application/json", 
+            "application/json; charset=utf-8", 
             response.toString()
         )
     }
