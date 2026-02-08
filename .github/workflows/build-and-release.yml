@@ -1,0 +1,74 @@
+name: Android Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        cache: gradle
+    
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
+    
+    - name: Build Release APK (unsigned)
+      run: ./gradlew clean assembleRelease --stacktrace
+    
+    - name: Get version from tag
+      id: tag_version
+      run: |
+        TAG_NAME=${GITHUB_REF#refs/tags/}
+        echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+        echo "version=${TAG_NAME#v}" >> $GITHUB_OUTPUT
+    
+    - name: Prepare release notes
+      id: release_notes
+      run: |
+        VERSION=${{ steps.tag_version.outputs.version }}
+        echo "# Release v$VERSION" > release_notes.md
+        echo "" >> release_notes.md
+        echo "## 构建信息" >> release_notes.md
+        echo "- 版本: $VERSION" >> release_notes.md
+        echo "- 构建时间: $(date -u)" >> release_notes.md
+        echo "- Git SHA: ${{ github.sha }}" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "## 文件说明" >> release_notes.md
+        echo "- \`app-release-unsigned.apk\`: Release 版本 APK（未签名）" >> release_notes.md
+        echo "" >> release_notes.md
+        echo "## 安装方式" >> release_notes.md
+        echo "\`\`\`bash" >> release_notes.md
+        echo "adb install app-release-unsigned.apk" >> release_notes.md
+        echo "\`\`\`" >> release_notes.md
+    
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: app/build/outputs/apk/release/app-release-unsigned.apk
+        tag_name: ${{ steps.tag_version.outputs.tag }}
+        name: Release ${{ steps.tag_version.outputs.version }}
+        body_path: release_notes.md
+        draft: false
+        prerelease: ${{ contains(steps.tag_version.outputs.tag, 'alpha') || contains(steps.tag_version.outputs.tag, 'beta') }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Build Summary
+      run: |
+        echo "✅ Release 构建完成！"
+        echo "版本: ${{ steps.tag_version.outputs.version }}"
+        echo "文件:"
+        ls -lh app/build/outputs/apk/release/*.apk
+
