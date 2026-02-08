@@ -25,7 +25,20 @@ jobs:
       run: chmod +x gradlew
     
     - name: Build Release APK (unsigned)
-      run: ./gradlew clean assembleRelease --stacktrace
+      run: |
+        echo "Starting Release APK build..."
+        ./gradlew clean assembleRelease --stacktrace --no-daemon
+        BUILD_STATUS=$?
+        echo "Build finished with status: $BUILD_STATUS"
+        if [ $BUILD_STATUS -ne 0 ]; then
+          echo "Build failed!"
+          exit 1
+        fi
+    
+    - name: Verify Release APK exists
+      run: |
+        echo "=== Checking Release APK ==="
+        ls -lh app/build/outputs/apk/release/*.apk 2>/dev/null || (echo "Release APK not found!" && exit 1)
     
     - name: Get version from tag
       id: tag_version
@@ -33,6 +46,7 @@ jobs:
         TAG_NAME=${GITHUB_REF#refs/tags/}
         echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
         echo "version=${TAG_NAME#v}" >> $GITHUB_OUTPUT
+        echo "Version: $TAG_NAME"
     
     - name: Prepare release notes
       id: release_notes
@@ -66,9 +80,11 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Build Summary
+      if: success()
       run: |
-        echo "✅ Release 构建完成！"
+        echo "✅ Release 构建和发布完成！"
         echo "版本: ${{ steps.tag_version.outputs.version }}"
         echo "文件:"
         ls -lh app/build/outputs/apk/release/*.apk
+
 

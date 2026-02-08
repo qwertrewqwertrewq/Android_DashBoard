@@ -28,15 +28,30 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     
-    - name: Build Release APK (unsigned)
-      run: ./gradlew clean assembleRelease --stacktrace
+    - name: Build Debug and Release APK
+      run: |
+        echo "Starting Android build..."
+        ./gradlew clean assembleDebug assembleRelease --stacktrace --no-daemon
+        BUILD_STATUS=$?
+        echo "Build finished with status: $BUILD_STATUS"
+        
+        if [ $BUILD_STATUS -ne 0 ]; then
+          echo "Build failed!"
+          exit 1
+        fi
     
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --stacktrace
+    - name: Verify APK files exist
+      run: |
+        echo "=== Checking APK files ==="
+        echo "Debug APK:"
+        ls -lh app/build/outputs/apk/debug/*.apk 2>/dev/null || (echo "Debug APK not found!" && exit 1)
+        echo ""
+        echo "Release APK:"
+        ls -lh app/build/outputs/apk/release/*.apk 2>/dev/null || (echo "Release APK not found!" && exit 1)
     
     - name: Upload Release APK to artifacts
       uses: actions/upload-artifact@v4
-      if: always()
+      if: success()
       with:
         name: app-release-apk
         path: app/build/outputs/apk/release/app-release-unsigned.apk
@@ -44,17 +59,22 @@ jobs:
     
     - name: Upload Debug APK to artifacts
       uses: actions/upload-artifact@v4
-      if: always()
+      if: success()
       with:
         name: app-debug-apk
         path: app/build/outputs/apk/debug/app-debug.apk
         retention-days: 7
     
-    - name: Get APK info
-      if: success()
+    - name: Build Summary
+      if: always()
       run: |
-        echo "=== Release APK ===" 
-        ls -lh app/build/outputs/apk/release/*.apk 2>/dev/null || echo "Not found"
-        echo "=== Debug APK ==="
-        ls -lh app/build/outputs/apk/debug/*.apk 2>/dev/null || echo "Not found"
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ Build successful!"
+          echo "Release APK: $(ls -lh app/build/outputs/apk/release/*.apk | awk '{print $NF, $5}')"
+          echo "Debug APK: $(ls -lh app/build/outputs/apk/debug/*.apk | awk '{print $NF, $5}')"
+        else
+          echo "❌ Build failed!"
+          exit 1
+        fi
+
 
