@@ -25,20 +25,13 @@ jobs:
       run: chmod +x gradlew
     
     - name: Build Release APK (unsigned)
-      run: |
-        echo "Starting Release APK build..."
-        ./gradlew clean assembleRelease --stacktrace --no-daemon
-        BUILD_STATUS=$?
-        echo "Build finished with status: $BUILD_STATUS"
-        if [ $BUILD_STATUS -ne 0 ]; then
-          echo "Build failed!"
-          exit 1
-        fi
+      run: ./gradlew clean assembleRelease --stacktrace --no-daemon
     
     - name: Verify Release APK exists
       run: |
-        echo "=== Checking Release APK ==="
-        ls -lh app/build/outputs/apk/release/*.apk 2>/dev/null || (echo "Release APK not found!" && exit 1)
+        test -f app/build/outputs/apk/release/app-release-unsigned.apk || (echo "Release APK not found!" && exit 1)
+        echo "✅ Release APK verified"
+        ls -lh app/build/outputs/apk/release/app-release-unsigned.apk
     
     - name: Get version from tag
       id: tag_version
@@ -46,26 +39,25 @@ jobs:
         TAG_NAME=${GITHUB_REF#refs/tags/}
         echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
         echo "version=${TAG_NAME#v}" >> $GITHUB_OUTPUT
-        echo "Version: $TAG_NAME"
     
     - name: Prepare release notes
-      id: release_notes
       run: |
-        VERSION=${{ steps.tag_version.outputs.version }}
-        echo "# Release v$VERSION" > release_notes.md
-        echo "" >> release_notes.md
-        echo "## 构建信息" >> release_notes.md
-        echo "- 版本: $VERSION" >> release_notes.md
-        echo "- 构建时间: $(date -u)" >> release_notes.md
-        echo "- Git SHA: ${{ github.sha }}" >> release_notes.md
-        echo "" >> release_notes.md
-        echo "## 文件说明" >> release_notes.md
-        echo "- \`app-release-unsigned.apk\`: Release 版本 APK（未签名）" >> release_notes.md
-        echo "" >> release_notes.md
-        echo "## 安装方式" >> release_notes.md
-        echo "\`\`\`bash" >> release_notes.md
-        echo "adb install app-release-unsigned.apk" >> release_notes.md
-        echo "\`\`\`" >> release_notes.md
+        cat > release_notes.md << 'EOF'
+        # Release ${{ steps.tag_version.outputs.version }}
+        
+        ## Build Information
+        - Version: ${{ steps.tag_version.outputs.version }}
+        - Build Time: $(date -u)
+        - Git SHA: ${{ github.sha }}
+        
+        ## Files
+        - `app-release-unsigned.apk`: Release APK (unsigned)
+        
+        ## Installation
+        ```bash
+        adb install app-release-unsigned.apk
+        ```
+        EOF
     
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
@@ -78,13 +70,6 @@ jobs:
         prerelease: ${{ contains(steps.tag_version.outputs.tag, 'alpha') || contains(steps.tag_version.outputs.tag, 'beta') }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    
-    - name: Build Summary
-      if: success()
-      run: |
-        echo "✅ Release 构建和发布完成！"
-        echo "版本: ${{ steps.tag_version.outputs.version }}"
-        echo "文件:"
-        ls -lh app/build/outputs/apk/release/*.apk
+
 
 
