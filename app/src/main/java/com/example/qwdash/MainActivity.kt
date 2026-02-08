@@ -123,6 +123,37 @@ class MainActivity : AppCompatActivity() {
     }
     
     /**
+     * 重新加载配置（按钮文本、颜色、字体大小）
+     */
+    fun reloadConfig() {
+        val fontSize = ConfigManager.getFontSize()
+        
+        for (i in 0..7) {
+            val buttonData = ConfigManager.getButtonConfig(i)
+            buttons[i].text = buttonData.name
+            
+            // 更新按钮颜色
+            try {
+                val color = android.graphics.Color.parseColor(buttonData.color)
+                buttons[i].backgroundTintList = android.content.res.ColorStateList.valueOf(color)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            
+            // 更新字体大小
+            buttons[i].textSize = fontSize
+            
+            // 更新点击事件
+            buttons[i].setOnClickListener {
+                onButtonClick(i, buttonData)
+            }
+        }
+        
+        showToast("配置已更新")
+        updateStatus("\n配置已重新加载\n", append = true)
+    }
+    
+    /**
      * 获取 WakeLock 保持 CPU 运行
      */
     private fun acquireWakeLock() {
@@ -176,10 +207,23 @@ class MainActivity : AppCompatActivity() {
         buttons.add(findViewById(R.id.button7))
         buttons.add(findViewById(R.id.button8))
         
+        // 获取字体大小
+        val fontSize = ConfigManager.getFontSize()
+        
         // 8个按钮全部从配置加载
         for (i in 0..7) {
             val buttonData = ConfigManager.getButtonConfig(i)
             buttons[i].text = buttonData.name
+            // 设置按钮颜色
+            try {
+                val color = android.graphics.Color.parseColor(buttonData.color)
+                buttons[i].backgroundTintList = android.content.res.ColorStateList.valueOf(color)
+            } catch (e: Exception) {
+                // 如果颜色解析失败，使用默认颜色
+                e.printStackTrace()
+            }
+            // 设置字体大小
+            buttons[i].textSize = fontSize
             buttons[i].setOnClickListener {
                 onButtonClick(i, buttonData)
             }
@@ -190,6 +234,7 @@ class MainActivity : AppCompatActivity() {
      * 按钮点击事件
      */
     private fun onButtonClick(index: Int, buttonData: ButtonData) {
+        onUserActivity()
         if (buttonData.curlCommand.isBlank()) {
             showToast("按钮未配置")
             updateStatus("按钮${index + 1}未配置\\n", append = true)
@@ -312,6 +357,9 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 blackOverlay.visibility = View.GONE
                 updateStatus("屏幕已打开\n", append = true)
+                // 恢复 RTSP 视频
+                rtspStreamManager?.startLiveMode()
+                updateStatus("视频流已恢复\n", append = true)
             }
         }
     }
@@ -320,11 +368,15 @@ class MainActivity : AppCompatActivity() {
      * 降低屏幕亮度
      */
     private fun turnOffScreen() {
+        // 停止 RTSP 视频
+        rtspStreamManager?.stopLiveStream()
+        
         thread {
             ScreenControl.turnOff()
             runOnUiThread {
                 blackOverlay.visibility = View.GONE
                 updateStatus("屏幕已降到最低亮度（30秒无操作）\n", append = true)
+                updateStatus("视频流已停止\n", append = true)
             }
         }
         
@@ -397,7 +449,12 @@ class MainActivity : AppCompatActivity() {
     private fun startHttpServer() {
         thread {
             try {
-                httpServer = ConfigHttpServer(8888)
+                httpServer = ConfigHttpServer(8888) {
+                    // 重新加载配置的回调
+                    runOnUiThread {
+                        reloadConfig()
+                    }
+                }
                 httpServer?.start()
                 
                 // 获取设备IP地址

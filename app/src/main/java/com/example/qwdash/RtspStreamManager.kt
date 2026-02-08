@@ -167,6 +167,23 @@ class RtspStreamManager(
         snapshotRunnable = null
     }
     
+    /**
+     * 停止直播（不释放资源）
+     */
+    fun stopLiveStream() {
+        if (!isLiveMode) return
+        
+        isLiveMode = false
+        
+        try {
+            mediaPlayer?.stop()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping live stream: ${e.message}")
+        }
+        
+        Log.d(TAG, "Live stream stopped")
+    }
+    
     /**     * 安排自动重连
      */
     private fun scheduleReconnect() {

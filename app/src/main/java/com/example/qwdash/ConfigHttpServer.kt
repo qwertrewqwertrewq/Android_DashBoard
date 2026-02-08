@@ -10,7 +10,10 @@ import org.json.JSONObject
  * 简单的HTTP配置服务器
  * 提供REST API来查询和修改应用配置
  */
-class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
+class ConfigHttpServer(
+    port: Int = 8888,
+    private val onReloadConfig: (() -> Unit)? = null
+) : NanoHTTPD(port) {
     
     companion object {
         private const val TAG = "ConfigHttpServer"
@@ -65,6 +68,24 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
                 }
             }
             
+            // 获取字体大小
+            uri == "/api/fontsize" && method == "GET" -> {
+                val fontSize = ConfigManager.getFontSize()
+                successResponse(mapOf("fontSize" to fontSize))
+            }
+            
+            // 设置字体大小
+            uri == "/api/fontsize" && method == "POST" -> {
+                val postData = parsePostData(session)
+                val fontSize = postData.optDouble("fontSize", 16.0).toFloat()
+                if (fontSize < 8f || fontSize > 48f) {
+                    errorResponse("字体大小必须在 8-48 之间")
+                } else {
+                    ConfigManager.saveFontSize(fontSize)
+                    successResponse("字体大小已设置为: $fontSize sp")
+                }
+            }
+            
             // 获取按钮配置
             uri.startsWith("/api/buttons") && method == "GET" -> {
                 getButtonsConfig()
@@ -104,6 +125,12 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
                 ))
             }
             
+            // 重新加载配置
+            uri == "/api/reload" && method == "POST" -> {
+                onReloadConfig?.invoke()
+                successResponse("配置已重新加载")
+            }
+            
             else -> {
                 notFoundResponse()
             }
@@ -117,6 +144,7 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
         val config = JsonObject()
         config.addProperty("rtspUrl", ConfigManager.getRtspUrl())
         config.addProperty("layout", ConfigManager.getLayoutMode())
+        config.addProperty("fontSize", ConfigManager.getFontSize())
         
         val buttons = mutableListOf<Map<String, String>>()
         for (i in 0..7) {
@@ -124,7 +152,8 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
             buttons.add(mapOf(
                 "id" to i.toString(),
                 "name" to buttonData.name,
-                "curl" to buttonData.curlCommand
+                "curl" to buttonData.curlCommand,
+                "color" to buttonData.color
             ))
         }
         config.add("buttons", gson.toJsonTree(buttons))
@@ -149,7 +178,8 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
             buttons.add(mapOf(
                 "id" to i.toString(),
                 "name" to buttonData.name,
-                "curl" to buttonData.curlCommand
+                "curl" to buttonData.curlCommand,
+                "color" to buttonData.color
             ))
         }
         return successResponse(mapOf("buttons" to buttons))
@@ -163,7 +193,8 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
         return successResponse(mapOf(
             "id" to index.toString(),
             "name" to buttonData.name,
-            "curl" to buttonData.curlCommand
+            "curl" to buttonData.curlCommand,
+            "color" to buttonData.color
         ))
     }
     
@@ -173,12 +204,20 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
     private fun updateButtonConfig(index: Int, data: JSONObject): Response {
         val name = data.optString("name", "")
         val curl = data.optString("curl", "")
+        val color = data.optString("color", "")
         
         if (name.isEmpty()) {
             return errorResponse("按钮名称不能为空")
         }
         
-        ConfigManager.saveButtonConfig(index, ButtonData(name, curl))
+        // 验证颜色格式
+        val colorToUse = if (color.matches(Regex("^#[0-9A-Fa-f]{6}$"))) {
+            color
+        } else {
+            ConfigManager.getButtonConfig(index).color // 使用当前颜色
+        }
+        
+        ConfigManager.saveButtonConfig(index, ButtonData(name, curl, colorToUse))
         return successResponse("按钮 $index 已更新")
     }
     
@@ -323,6 +362,9 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
         button:hover { background: #0056b3; }
         .button-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
         .button-card { background: #f9f9f9; padding: 15px; border-radius: 4px; border-left: 4px solid #007bff; }
+        .color-input-group { display: flex; align-items: center; gap: 10px; }
+        .color-preview { width: 40px; height: 40px; border: 2px solid #ddd; border-radius: 4px; cursor: pointer; }
+        .color-text { flex: 1; }
         .status { padding: 10px; border-radius: 4px; margin-top: 10px; }
         .status.success { background: #d4edda; color: #155724; }
         .status.error { background: #f8d7da; color: #721c24; }
@@ -330,7 +372,7 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
 </head>
 <body>
     <div class="container">
-        <h1>🎮 QWdash 配置管理</h1>
+        <h1>QWdash 配置管理</h1>
         
         <div class="card">
             <h2>视频流配置</h2>
@@ -356,6 +398,16 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
         </div>
         
         <div class="card">
+            <h2>按钮字体大小</h2>
+            <div class="form-group">
+                <label for="fontSize">字体大小（8-48 sp）</label>
+                <input type="number" id="fontSize" min="8" max="48" value="16" placeholder="16">
+                <button onclick="saveFontSize()">保存字体大小</button>
+                <div id="fontSizeStatus" class="status" style="display:none;"></div>
+            </div>
+        </div>
+        
+        <div class="card">
             <h2>按钮配置（1-8号）</h2>
             <div class="button-grid" id="buttonsContainer"></div>
         </div>
@@ -363,6 +415,13 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
         <div class="card">
             <h2>系统状态</h2>
             <div id="systemStatus">加载中...</div>
+        </div>
+        
+        <div class="card">
+            <h2>应用配置</h2>
+            <p style="color: #666; margin-bottom: 15px;">修改配置后，点击下方按钮立即在应用中生效，无需重启</p>
+            <button onclick="reloadConfig()" style="background: #28a745; font-size: 16px; padding: 12px 24px;">应用所有配置</button>
+            <div id="reloadStatus" class="status" style="display:none;"></div>
         </div>
     </div>
     
@@ -379,6 +438,10 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
                 data = await res.json();
                 if (data.success) document.getElementById('layoutMode').value = data.data.layout;
                 
+                res = await fetch(API_BASE + '/api/fontsize');
+                data = await res.json();
+                if (data.success) document.getElementById('fontSize').value = data.data.fontSize;
+                
                 res = await fetch(API_BASE + '/api/buttons');
                 data = await res.json();
                 if (data.success) {
@@ -391,6 +454,13 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
                             '<div class="form-group">' +
                             '<label>名称</label>' +
                             '<input type="text" id="btn_name_' + btn.id + '" value="' + btn.name + '">' +
+                            '</div>' +
+                            '<div class="form-group">' +
+                            '<label>颜色（#RRGGBB）</label>' +
+                            '<div class="color-input-group">' +
+                            '<div class="color-preview" id="btn_color_preview_' + btn.id + '" style="background-color: ' + (btn.color || '#808080') + ';" onclick="document.getElementById(\'btn_color_' + btn.id + '\').focus()"></div>' +
+                            '<input type="text" class="color-text" id="btn_color_' + btn.id + '" value="' + (btn.color || '#808080') + '" placeholder="#RRGGBB" oninput="updateColorPreview(' + btn.id + ')">' +
+                            '</div>' +
                             '</div>' +
                             '<div class="form-group">' +
                             '<label>Curl命令</label>' +
@@ -447,23 +517,58 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
             }
         }
         
+        async function saveFontSize() {
+            const fontSize = parseFloat(document.getElementById('fontSize').value);
+            if (isNaN(fontSize) || fontSize < 8 || fontSize > 48) {
+                showStatus('fontSizeStatus', '字体大小必须在 8-48 之间', false);
+                return;
+            }
+            try {
+                const res = await fetch(API_BASE + '/api/fontsize', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({fontSize: fontSize})
+                });
+                const data = await res.json();
+                showStatus('fontSizeStatus', data.data || data.message, data.success);
+            } catch (error) {
+                showStatus('fontSizeStatus', '保存失败: ' + error.message, false);
+            }
+        }
+        
         async function saveButton(id) {
             const name = document.getElementById('btn_name_' + id).value;
             const curl = document.getElementById('btn_curl_' + id).value;
+            const color = document.getElementById('btn_color_' + id).value;
             if (!name) {
                 showStatus('btn_status_' + id, '名称不能为空', false);
+                return;
+            }
+            // 验证颜色格式
+            if (color && !color.match(/^#[0-9A-Fa-f]{6}$/)) {
+                showStatus('btn_status_' + id, '颜色格式错误，请使用 #RRGGBB 格式', false);
                 return;
             }
             try {
                 const res = await fetch(API_BASE + '/api/buttons/' + id, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name: name, curl: curl})
+                    body: JSON.stringify({name: name, curl: curl, color: color})
                 });
                 const data = await res.json();
                 showStatus('btn_status_' + id, data.data || data.message, data.success);
             } catch (error) {
                 showStatus('btn_status_' + id, '保存失败: ' + error.message, false);
+            }
+        }
+        
+        function updateColorPreview(id) {
+            const colorInput = document.getElementById('btn_color_' + id);
+            const colorPreview = document.getElementById('btn_color_preview_' + id);
+            const color = colorInput.value;
+            // 验证颜色格式
+            if (color.match(/^#[0-9A-Fa-f]{6}$/)) {
+                colorPreview.style.backgroundColor = color;
             }
         }
         
@@ -473,6 +578,19 @@ class ConfigHttpServer(port: Int = 8888) : NanoHTTPD(port) {
             elem.className = 'status ' + (success ? 'success' : 'error');
             elem.style.display = 'block';
             setTimeout(() => { elem.style.display = 'none'; }, 5000);
+        }
+        
+        async function reloadConfig() {
+            try {
+                const res = await fetch(API_BASE + '/api/reload', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                const data = await res.json();
+                showStatus('reloadStatus', data.data || data.message || '配置已应用到应用', data.success);
+            } catch (error) {
+                showStatus('reloadStatus', '应用配置失败: ' + error.message, false);
+            }
         }
         
         window.addEventListener('load', loadConfig);

@@ -13,9 +13,11 @@ object ConfigManager {
     private const val KEY_RTSP_URL = "rtsp_url"
     private const val KEY_BUTTONS = "buttons"
     private const val KEY_LAYOUT = "layout_mode"
+    private const val KEY_FONT_SIZE = "font_size"
     private const val DEFAULT_RTSP_URL = "rtsp://192.168.31.17:8554/stream1"
     private const val LAYOUT_VERTICAL = "vertical"
     private const val LAYOUT_HORIZONTAL = "horizontal"
+    private const val DEFAULT_FONT_SIZE = 16f
     
     private lateinit var prefs: SharedPreferences
     
@@ -38,6 +40,23 @@ object ConfigManager {
     }
     
     /**
+     * 获取默认按钮颜色
+     */
+    private fun getDefaultColor(index: Int): String {
+        return when (index) {
+            0 -> "#FF5722"
+            1 -> "#4CAF50"
+            2 -> "#2196F3"
+            3 -> "#FFC107"
+            4 -> "#9C27B0"
+            5 -> "#F44336"
+            6 -> "#00BCD4"
+            7 -> "#FF9800"
+            else -> "#808080"
+        }
+    }
+    
+    /**
      * 获取按钮配置
      */
     fun getButtonConfig(index: Int): ButtonData {
@@ -49,14 +68,15 @@ object ConfigManager {
                     val jsonObject = jsonArray.getJSONObject(index)
                     return ButtonData(
                         name = jsonObject.getString("name"),
-                        curlCommand = jsonObject.getString("curl")
+                        curlCommand = jsonObject.getString("curl"),
+                        color = jsonObject.optString("color", getDefaultColor(index))
                     )
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             }
         }
-        return ButtonData("按钮${index + 1}", "")
+        return ButtonData("按钮${index + 1}", "", getDefaultColor(index))
     }
     
     /**
@@ -77,8 +97,10 @@ object ConfigManager {
         // 确保数组足够大
         while (jsonArray.length() <= index) {
             val defaultButton = JSONObject()
-            defaultButton.put("name", "按钮${jsonArray.length() + 1}")
+            val idx = jsonArray.length()
+            defaultButton.put("name", "按钮${idx + 1}")
             defaultButton.put("curl", "")
+            defaultButton.put("color", getDefaultColor(idx))
             jsonArray.put(defaultButton)
         }
         
@@ -86,6 +108,7 @@ object ConfigManager {
         val jsonObject = JSONObject()
         jsonObject.put("name", buttonData.name)
         jsonObject.put("curl", buttonData.curlCommand)
+        jsonObject.put("color", buttonData.color)
         jsonArray.put(index, jsonObject)
         
         prefs.edit().putString(KEY_BUTTONS, jsonArray.toString()).apply()
@@ -121,6 +144,20 @@ object ConfigManager {
     fun isHorizontalLayout(): Boolean {
         return getLayoutMode() == LAYOUT_HORIZONTAL
     }
+    
+    /**
+     * 获取按钮字体大小（单位：sp）
+     */
+    fun getFontSize(): Float {
+        return prefs.getFloat(KEY_FONT_SIZE, DEFAULT_FONT_SIZE)
+    }
+    
+    /**
+     * 保存按钮字体大小（单位：sp）
+     */
+    fun saveFontSize(size: Float) {
+        prefs.edit().putFloat(KEY_FONT_SIZE, size).apply()
+    }
 }
 
 /**
@@ -128,5 +165,6 @@ object ConfigManager {
  */
 data class ButtonData(
     val name: String,
-    val curlCommand: String
+    val curlCommand: String,
+    val color: String = "#808080"
 )
