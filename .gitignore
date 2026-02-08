@@ -24,3 +24,7 @@ local.properties
 # Release files
 app/release/
 app/debug/
+
+# Signing keystore
+*.jks
+*.keystore

@@ -27,14 +27,22 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     
-    - name: Build Release APK (unsigned)
+    - name: Decode Keystore
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release-keystore.jks
+    
+    - name: Build Release APK (signed)
       run: ./gradlew clean assembleRelease --stacktrace --no-daemon
+    
+    - name: Cleanup Keystore
+      if: always()
+      run: rm -f app/release-keystore.jks
     
     - name: Verify Release APK exists
       run: |
-        test -f app/build/outputs/apk/release/app-release-unsigned.apk || (echo "Release APK not found!" && exit 1)
+        test -f app/build/outputs/apk/release/app-release.apk || (echo "Release APK not found!" && exit 1)
         echo "✅ Release APK verified"
-        ls -lh app/build/outputs/apk/release/app-release-unsigned.apk
+        ls -lh app/build/outputs/apk/release/app-release.apk
     
     - name: Get version from tag
       id: tag_version
@@ -65,7 +73,7 @@ jobs:
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v1
       with:
-        files: app/build/outputs/apk/release/app-release-unsigned.apk
+        files: app/build/outputs/apk/release/app-release.apk
         tag_name: ${{ steps.tag_version.outputs.tag }}
         name: Release ${{ steps.tag_version.outputs.version }}
         body_path: release_notes.md
